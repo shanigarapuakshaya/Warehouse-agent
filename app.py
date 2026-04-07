@@ -1,4 +1,3 @@
-
 import gradio as gr
 from collections import deque
 from dataclasses import dataclass
@@ -121,14 +120,13 @@ def run_env(mode):
         if action is None:
             break
         state, reward, done, _ = env.step(action)
-        output += f"Step {step}: {action}, Pos={state.agent_pos}, Reward={reward}
+        output += f"Step {step}: {action}, Pos={state.agent_pos}, Reward={reward}\n"
 "
         if done:
             break
 
     score = (env.total_tasks - len(env.pickup_points)) / env.total_tasks
-    return output + f"
-Final Score: {score:.3f}"
+    return output + f"\nFinal Score: {score:.3f}"
 
 # UI
 demo = gr.Interface(
