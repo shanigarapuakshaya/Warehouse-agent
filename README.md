@@ -1,6 +1,16 @@
+---
+title: Warehouse Agent
+emoji:  🚀
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_file: app.py
+pinned: false
+---
 
 # Warehouse OpenEnv Project
 
+## Description
 This project simulates a warehouse where an agent picks items and delivers them.
 
 ## Features
@@ -13,3 +23,6 @@ Achieved score: 0.826
 
 ## How to run
 Run all cells in the notebook.
+
+
+
