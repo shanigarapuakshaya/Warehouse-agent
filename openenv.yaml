@@ -1,0 +1,31 @@
+
+name: warehouse-env
+
+description: AI environment for warehouse pickup and delivery
+
+actions:
+  - up
+  - down
+  - left
+  - right
+  - pickup
+  - drop
+
+observation:
+  agent_position: (x, y)
+  pickup_points: list of positions
+  drop_zone: position
+  carrying: true/false
+
+reward:
+  step_penalty: -1
+  invalid_action: -10
+  successful_pickup: +10
+  successful_drop: +15
+
+tasks:
+  easy: 1 pickup
+  medium: 2 pickups
+  hard: 3 pickups
+
+score_range: 0.0 to 1.0
