@@ -1,28 +1,34 @@
 ---
-title: Warehouse Agent
-emoji:  🚀
+title: Warehouse OpenEnv Agent
+emoji: 🤖
 colorFrom: blue
 colorTo: green
 sdk: docker
+sdk_version: latest
 app_file: app.py
 pinned: false
+license: mit
 ---
 
-# Warehouse OpenEnv Project
+# Warehouse OpenEnv Agent
 
-## Description
-This project simulates a warehouse where an agent picks items and delivers them.
+A simple warehouse navigation environment for AI agents.
 
-## Features
-- 3 difficulty levels (easy, medium, hard)
-- Reward-based system
-- BFS pathfinding agent
+## Tasks
+- Easy: 4x4 grid
+- Medium: 6x6 grid
+- Hard: 8x8 grid
 
-## Score
-Achieved score: 0.826
+## API
+- GET /
+- POST /reset
+- POST /step
+- GET /state
 
-## How to run
-Run all cells in the notebook.
+## Run
+Deployed via Docker on Hugging Face Spaces.
+
+
 
 
 
