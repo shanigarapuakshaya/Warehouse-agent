@@ -1,139 +1,141 @@
-import gradio as gr
-from collections import deque
-from dataclasses import dataclass
-from typing import List, Tuple
+from fastapi import FastAPI
+from pydantic import BaseModel
 
-# STATE
-@dataclass
-class State:
-    agent_pos: Tuple[int, int]
-    pickup_points: List[Tuple[int, int]]
-    drop_zone: Tuple[int, int]
-    carrying: bool
+app = FastAPI()
 
-# ENVIRONMENT
+# Data Models
+
+class Action(BaseModel):
+    action: str  # up, down, left, right, pick
+
+
+# Environment
+
 class WarehouseEnv:
-    def __init__(self, size=5):
-        self.size = size
+    def __init__(self):
+        self.reset("easy")
 
     def reset(self, mode="easy"):
-        self.agent_pos = (0, 0)
-        self.carrying = False
-
         if mode == "easy":
-            self.pickup_points = [(2, 2)]
-            self.obstacles = [(1, 1)]
+            self.size = 4
         elif mode == "medium":
-            self.pickup_points = [(2, 2), (3, 1)]
-            self.obstacles = [(1,1), (2,3)]
+            self.size = 6
         else:
-            self.pickup_points = [(2,2), (3,1), (1,3)]
-            self.obstacles = [(1,1), (2,3), (3,3)]
+            self.size = 8
 
-        self.drop_zone = (4, 4)
-        self.total_tasks = len(self.pickup_points)
+        self.position = [0, 0]
+        self.goal = [self.size - 1, self.size - 1]
+        self.item_picked = False
+        self.steps = 0
+
         return self.state()
 
     def state(self):
-        return State(self.agent_pos, self.pickup_points.copy(), self.drop_zone, self.carrying)
+        return {
+            "position": self.position,
+            "goal": self.goal,
+            "item_picked": self.item_picked,
+            "steps": self.steps
+        }
 
     def step(self, action):
-        x, y = self.agent_pos
-        reward = -1
+        x, y = self.position
+        self.steps += 1
+
+        if action == "up":
+            x -= 1
+        elif action == "down":
+            x += 1
+        elif action == "left":
+            y -= 1
+        elif action == "right":
+            y += 1
+
+        # boundary check
+        x = max(0, min(self.size - 1, x))
+        y = max(0, min(self.size - 1, y))
+
+        self.position = [x, y]
+
+        reward = 0.0
         done = False
 
-        moves = {"up":(-1,0), "down":(1,0), "left":(0,-1), "right":(0,1)}
+        # distance-based reward
+        dist = abs(x - self.goal[0]) + abs(y - self.goal[1])
+        reward += (self.size * 2 - dist) / (self.size * 2)
 
-        if action in moves:
-            dx, dy = moves[action]
-            nx, ny = x+dx, y+dy
+        # pick action
+        if action == "pick" and self.position == self.goal:
+            self.item_picked = True
+            reward = 1.0
+            done = True
 
-            if 0 <= nx < self.size and 0 <= ny < self.size:
-                if (nx, ny) not in self.obstacles:
-                    self.agent_pos = (nx, ny)
-                else:
-                    reward = -10
-
-        elif action == "pickup":
-            if self.agent_pos in self.pickup_points and not self.carrying:
-                self.pickup_points.remove(self.agent_pos)
-                self.carrying = True
-                reward = 10
-            else:
-                reward = -10
-
-        elif action == "drop":
-            if self.agent_pos == self.drop_zone and self.carrying:
-                self.carrying = False
-                reward = 15
-                if len(self.pickup_points) == 0:
-                    done = True
-            else:
-                reward = -10
+        # stop if too many steps
+        if self.steps >= self.size * 3:
+            done = True
 
         return self.state(), reward, done, {}
 
-# BFS
-def get_next_step(start, goal, obstacles, size):
-    queue = deque([(start, [])])
-    visited = {start}
-    moves = {"up":(-1,0), "down":(1,0), "left":(0,-1), "right":(0,1)}
 
-    while queue:
-        (x,y), path = queue.popleft()
-        if (x,y) == goal:
-            return path[0] if path else None
+# Initialize Environment
 
-        for action,(dx,dy) in moves.items():
-            nx, ny = x+dx, y+dy
-            if 0 <= nx < size and 0 <= ny < size:
-                if (nx,ny) not in obstacles and (nx,ny) not in visited:
-                    queue.append(((nx,ny), path+[action]))
-                    visited.add((nx,ny))
-    return None
+env = WarehouseEnv()
 
-# AGENT
-def agent(state, env):
-    if len(state.pickup_points) == 0 and not state.carrying:
-        return None
 
-    x, y = state.agent_pos
+# API Endpoints
 
-    if not state.carrying:
-        target = min(state.pickup_points, key=lambda p: abs(p[0]-x)+abs(p[1]-y))
-    else:
-        target = state.drop_zone
+@app.get("/")
+def home():
+    return {"status": "Warehouse OpenEnv Running"}
 
-    if state.agent_pos == target:
-        return "pickup" if not state.carrying else "drop"
 
-    return get_next_step(state.agent_pos, target, env.obstacles, env.size)
+@app.post("/reset")
+def reset(mode: str = "easy"):
+    return env.reset(mode)
 
-# RUN
-def run_env(mode):
-    env = WarehouseEnv()
-    state = env.reset(mode)
-    output = ""
 
-    for step in range(50):
-        action = agent(state, env)
-        if action is None:
-            break
+@app.post("/step")
+def step(action: Action):
+    state, reward, done, _ = env.step(action.action)
+    return {
+        "state": state,
+        "reward": reward,
+        "done": done
+    }
+
+
+@app.get("/state")
+def state():
+    return env.state()
+
+
+@app.get("/run")
+def run():
+    state = env.reset("easy")
+    total_reward = 0
+
+    for _ in range(50):
+        x, y = state["position"]
+        gx, gy = state["goal"]
+
+        if x < gx:
+            action = "down"
+        elif x > gx:
+            action = "up"
+        elif y < gy:
+            action = "right"
+        elif y > gy:
+            action = "left"
+        else:
+            action = "pick"
+
         state, reward, done, _ = env.step(action)
-        output += f"Step {step}: {action}, Pos={state.agent_pos}, Reward={reward}\n"
-"
+        total_reward += reward
+
         if done:
             break
 
-    score = (env.total_tasks - len(env.pickup_points)) / env.total_tasks
-    return output + f"\nFinal Score: {score:.3f}"
-
-# UI
-demo = gr.Interface(
-    fn=run_env,
-    inputs=gr.Dropdown(["easy","medium","hard"]),
-    outputs="text",
-    title="Warehouse Agent Simulation"
-)
-
-demo.launch(server_name="0.0.0.0", server_port=7860)
+    return {
+        "final_state": state,
+        "total_reward": total_reward
+    }
