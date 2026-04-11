@@ -1,11 +1,13 @@
 import os
+from openai import OpenAI
 from app import env
 
-# SAFE IMPORT (prevents crash)
-try:
-    from openai import OpenAI
 
-    api_base = os.environ.get("API_BASE_URL")
+def run_inference():
+    task_name = "warehouse-easy"
+
+    # MUST use these exact env variables
+    api_base = os.environ["API_BASE_URL"]
     model = os.environ.get("MODEL_NAME", "gpt-4o-mini")
     api_key = os.environ.get("HF_TOKEN", "dummy")
 
@@ -13,12 +15,6 @@ try:
         base_url=api_base,
         api_key=api_key
     )
-except Exception:
-    client = None  # fallback if openai not installed
-
-
-def run_inference():
-    task_name = "warehouse-easy"
 
     print(f"[START] task={task_name}", flush=True)
 
@@ -30,23 +26,22 @@ def run_inference():
         x, y = state["position"]
         gx, gy = state["goal"]
 
-        action = ""
+        # ORCE API CALL (no skipping)
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a warehouse agent."},
+                {"role": "user", "content": f"Position: {state['position']} Goal: {state['goal']}. Give one-word move."}
+            ],
+        )
 
-        # SAFE API CALL (only if client exists)
-        if client:
-            try:
-                response = client.chat.completions.create(
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": "Warehouse agent"},
-                        {"role": "user", "content": f"Position: {state['position']} Goal: {state['goal']}"}
-                    ],
-                )
-                action = response.choices[0].message.content.strip().lower()
-            except Exception:
-                action = ""
+        # try to use model output
+        try:
+            action = response.choices[0].message.content.strip().lower()
+        except:
+            action = ""
 
-        # fallback logic 
+        # fallback (ensures completion)
         if action not in ["up", "down", "left", "right", "pick"]:
             if x < gx:
                 action = "down"
