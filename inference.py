@@ -1,15 +1,20 @@
 import os
+from app import env
 
+# SAFE IMPORT (prevents crash)
 try:
     from openai import OpenAI
+
+    api_base = os.environ.get("API_BASE_URL")
+    model = os.environ.get("MODEL_NAME", "gpt-4o-mini")
+    api_key = os.environ.get("HF_TOKEN", "dummy")
+
     client = OpenAI(
-        api_key=os.environ.get("API_KEY"),
-        base_url=os.environ.get("API_BASE_URL")
+        base_url=api_base,
+        api_key=api_key
     )
 except Exception:
-    client = None  # fallback if library missing
-
-from app import env
+    client = None  # fallback if openai not installed
 
 
 def run_inference():
@@ -18,44 +23,48 @@ def run_inference():
     print(f"[START] task={task_name}", flush=True)
 
     state = env.reset("easy")
-    total_reward = 0
+    total_reward = 0.0
     steps = 0
 
-    for i in range(20):
+    for step in range(1, 11):
         x, y = state["position"]
         gx, gy = state["goal"]
 
-        # safe API call
+        action = ""
+
+        # SAFE API CALL (only if client exists)
         if client:
             try:
-                client.chat.completions.create(
-                    model="gpt-4o-mini",
+                response = client.chat.completions.create(
+                    model=model,
                     messages=[
                         {"role": "system", "content": "Warehouse agent"},
                         {"role": "user", "content": f"Position: {state['position']} Goal: {state['goal']}"}
                     ],
                 )
+                action = response.choices[0].message.content.strip().lower()
             except Exception:
-                pass  # ignore API errors
+                action = ""
 
         # fallback logic 
-        if x < gx:
-            action = "down"
-        elif x > gx:
-            action = "up"
-        elif y < gy:
-            action = "right"
-        elif y > gy:
-            action = "left"
-        else:
-            action = "pick"
+        if action not in ["up", "down", "left", "right", "pick"]:
+            if x < gx:
+                action = "down"
+            elif x > gx:
+                action = "up"
+            elif y < gy:
+                action = "right"
+            elif y > gy:
+                action = "left"
+            else:
+                action = "pick"
 
         state, reward, done, _ = env.step(action)
 
         total_reward += reward
-        steps += 1
+        steps = step
 
-        print(f"[STEP] step={steps} reward={reward}", flush=True)
+        print(f"[STEP] step={step} reward={reward}", flush=True)
 
         if done:
             break
